@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Impostor de Palabra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0e0e10;
+    --surface: #18181c;
+    --surface2: #222228;
+    --border: rgba(255,255,255,0.08);
+    --border-hover: rgba(255,255,255,0.18);
+    --text: #f0efe8;
+    --text-muted: rgba(240,239,232,0.45);
+    --text-dim: rgba(240,239,232,0.25);
+    --accent: #c8f135;
+    --accent-dark: #9abf1a;
+    --red: #ff5a5a;
+    --green: #5affa0;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 4rem;
+  }
+
+  /* noise overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  #app { position: relative; z-index: 1; width: 100%; max-width: 480px; }
+
+  /* Header */
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-align: center;
+    margin-bottom: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .logo::before, .logo::after {
+    content: '';
+    height: 1px;
+    width: 40px;
+    background: var(--accent);
+    opacity: 0.4;
+  }
+
+  /* Phase management */
+  .phase { display: none; }
+  .phase.active { display: block; animation: fadeUp 0.35s ease; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Typography */
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem, 8vw, 3rem);
+    font-weight: 800;
+    line-height: 1.05;
+    margin-bottom: 0.5rem;
+  }
+  h1 span { color: var(--accent); }
+  .subtitle {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+  }
+  .section-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  /* Cards / surfaces */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  /* Form elements */
+  input[type="text"], textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: none;
+  }
+  input[type="text"]:focus, textarea:focus {
+    border-color: var(--border-hover);
+  }
+  input[type="text"]::placeholder, textarea::placeholder {
+    color: var(--text-dim);
+  }
+
+  /* Chips / tags */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 5px 12px;
+    font-size: 13px;
+    color: var(--text);
+    transition: border-color 0.2s;
+  }
+  .chip:hover { border-color: var(--border-hover); }
+  .chip-del {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted);
+    font-size: 16px; line-height: 1;
+    padding: 0; margin: 0;
+    transition: color 0.15s;
+  }
+  .chip-del:hover { color: var(--red); }
+  .chip.word-chip { border-color: rgba(200,241,53,0.2); color: var(--accent); }
+
+  /* Input row */
+  .input-row { display: flex; gap: 8px; align-items: stretch; }
+  .input-row input { flex: 1; }
+  .icon-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 20px;
+    width: 42px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.2s, background 0.2s;
+    flex-shrink: 0;
+  }
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(200,241,53,0.06); }
+
+  /* Primary button */
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: #0e0e10;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 14px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-top: 0.5rem;
+  }
+  .btn-primary:hover { background: #d4ff40; }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { background: var(--surface2); color: var(--text-dim); cursor: default; }
+
+  /* Ghost button */
+  .btn-ghost {
+    width: 100%;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    margin-top: 8px;
+  }
+  .btn-ghost:hover { border-color: var(--border-hover); color: var(--text); }
+
+  /* Divider */
+  hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+
+  /* --- PHASE: LOBBY --- */
+  .players-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .player-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    padding: 14px 10px;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.25s, background 0.25s, transform 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .player-btn:hover {
+    border-color: var(--accent);
+    background: rgba(200,241,53,0.07);
+    transform: translateY(-2px);
+  }
+  .player-btn.seen {
+    border-color: rgba(200,241,53,0.35);
+    background: rgba(200,241,53,0.06);
+    color: var(--text-muted);
+  }
+  .player-btn.seen::after {
+    content: '✓';
+    position: absolute; top: 6px; right: 8px;
+    font-size: 11px; color: var(--accent);
+  }
+
+
+  /* --- PHASE: WORD REVEAL --- */
+  .reveal-wrap {
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+  }
+  .reveal-player {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+  }
+  .reveal-role {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+  }
+  .reveal-role.normal { color: var(--green); }
+  .reveal-role.impostor { color: var(--red); }
+  .big-word {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.5rem, 12vw, 4.5rem);
+    font-weight: 800;
+    line-height: 1;
+    margin: 1rem 0 2rem;
+    letter-spacing: -2px;
+  }
+  .big-word.normal-word { color: var(--accent); }
+  .big-word.impostor-word { color: var(--red); }
+  .reveal-hint {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    max-width: 280px;
+    margin: 0 auto 1.5rem;
+  }
+
+  /* Modal-style overlay for word tap */
+  .tap-overlay {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.25s, background 0.25s;
+    user-select: none;
+  }
+  .tap-overlay:hover { border-color: var(--border-hover); background: var(--surface2); }
+  .tap-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+  }
+  .tap-hint-text {
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  /* Progress bar */
+  .progress-bar-wrap {
+    background: var(--surface2);
+    border-radius: 99px;
+    height: 4px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 99px;
+    transition: width 0.4s ease;
+  }
+  .progress-text {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: right;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  /* Results */
+  .result-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    margin-bottom: 8px;
+    border: 1px solid var(--border);
+  }
+  .result-name { font-size: 15px; font-weight: 500; }
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+  .badge-imp { background: rgba(255,90,90,0.15); color: var(--red); }
+  .badge-norm { background: rgba(90,255,160,0.12); color: var(--green); }
+
+  .final-word-display {
+    text-align: center;
+    padding: 1.5rem;
+    background: rgba(200,241,53,0.06);
+    border: 1px solid rgba(200,241,53,0.2);
+    border-radius: var(--radius);
+    margin-bottom: 1.5rem;
+  }
+  .final-word-display .label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+  .final-word-display .word { font-family: 'Syne', sans-serif; font-size: 2rem; font-weight: 800; color: var(--accent); }
+
+  /* Warn */
+  .warn { font-size: 12px; color: var(--red); margin-top: 6px; display: none; }
+
+  /* Textarea for bulk words */
+  textarea { min-height: 90px; }
+
+  @media (max-width: 400px) {
+    h1 { font-size: 2rem; }
+    .players-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="logo">Impostor de Palabra</div>
+
+  <!-- ===== PHASE: SETUP ===== -->
+  <div id="phase-setup" class="phase active">
+    <h1>La palabra<br/><span>secreta</span></h1>
+    <p class="subtitle">Agrega jugadores y un listado de palabras. Al iniciar, se elige una al azar — excepto para el impostor.</p>
+
+    <div class="card">
+      <p class="section-label">Jugadores</p>
+      <div class="input-row">
+        <input type="text" id="player-input" placeholder="Nombre del jugador" />
+        <button class="icon-btn" onclick="addPlayer()" title="Agregar">+</button>
+      </div>
+      <p class="warn" id="warn-players">Mínimo 3 jugadores</p>
+      <div class="chips" id="players-chips"></div>
+    </div>
+
+    <div class="card">
+      <p class="section-label">Lista de palabras</p>
+      <p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">Una por línea, o separadas por coma.</p>
+      <textarea id="words-textarea" placeholder="Pizza&#10;Montaña&#10;Guitarra&#10;Océano&#10;..."></textarea>
+      <p class="warn" id="warn-words">Agrega al menos 1 palabra</p>
+      <div class="chips" id="words-chips" style="margin-top:10px;"></div>
+    </div>
+
+    <button class="btn-primary" onclick="startGame()">Iniciar partida</button>
+  </div>
+
+  <!-- ===== PHASE: LOBBY (tap to reveal) ===== -->
+  <div id="phase-lobby" class="phase">
+    <h1>Toca tu<br/><span>nombre</span></h1>
+    <p class="subtitle" id="lobby-subtitle"></p>
+
+    <div class="progress-text" id="lobby-progress"></div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="lobby-bar" style="width:0%"></div>
+    </div>
+
+    <div class="players-grid" id="players-grid"></div>
+
+    <button class="btn-primary" id="btn-all-seen" onclick="goToVote()" style="margin-top:1.5rem; display:none">
+      ¡Todos vieron su palabra! →
+    </button>
+  </div>
+
+  <!-- ===== PHASE: REVEAL (word shown) ===== -->
+  <div id="phase-reveal" class="phase">
+    <div class="tap-overlay" onclick="closeReveal()" id="reveal-container">
+      <div class="reveal-player" id="reveal-name"></div>
+      <div class="reveal-role" id="reveal-role"></div>
+      <div class="big-word" id="reveal-word"></div>
+      <p class="reveal-hint" id="reveal-hint"></p>
+      <p style="font-size:12px; color:var(--text-dim); letter-spacing:1px;">TOCA PARA CERRAR</p>
+    </div>
+  </div>
+
+  <!-- ===== PHASE: VOTE ===== -->
+  <div id="phase-vote" class="phase">
+    <h1>¡A<br/><span>votar!</span></h1>
+    <p class="subtitle">Discutan, debatan, acusen. ¿Quién es el impostor? Cuando estén listos, revelen el resultado.</p>
+    <div class="card" style="background:rgba(255,90,90,0.06); border-color:rgba(255,90,90,0.2)">
+      <p style="font-size:13px; color:rgba(255,90,90,0.8); line-height:1.6;">
+        El impostor debe intentar adivinar la palabra secreta antes de ser descubierto. Si la adivina, ¡gana!
+      </p>
+    </div>
+    <button class="btn-primary" onclick="showResults()">Revelar impostores</button>
+    <button class="btn-ghost" onclick="goSetup()">Nueva partida</button>
+  </div>
+
+  <!-- ===== PHASE: RESULTS ===== -->
+  <div id="phase-results" class="phase">
+    <h1>Fin de<br/><span>partida</span></h1>
+
+    <div class="final-word-display">
+      <div class="label">La palabra secreta era</div>
+      <div class="word" id="results-secret-word"></div>
+    </div>
+
+    <div id="results-list"></div>
+
+    <button class="btn-primary" onclick="playAgainSameConfig()">Jugar de nuevo (mismos jugadores)</button>
+    <button class="btn-ghost" onclick="goSetup()">Cambiar configuración</button>
+  </div>
+</div>
+
+<script>
+let players = [];
+let wordList = [];
+let assignments = [];
+let seenPlayers = new Set();
+
+// ---- Utils ----
+function showPhase(id) {
+  document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function parseWords(text) {
+  return text
+    .split(/[\n,]+/)
+    .map(w => w.trim())
+    .filter(w => w.length > 0);
+}
+
+// ---- Setup ----
+const playerInput = document.getElementById('player-input');
+playerInput.addEventListener('keydown', e => { if (e.key === 'Enter') addPlayer(); });
+
+document.getElementById('words-textarea').addEventListener('input', renderWordChips);
+
+function addPlayer() {
+  const name = playerInput.value.trim();
+  if (!name || players.includes(name)) { playerInput.value = ''; return; }
+  players.push(name);
+  playerInput.value = '';
+  renderPlayerChips();
+}
+
+function removePlayer(i) {
+  players.splice(i, 1);
+  renderPlayerChips();
+}
+
+function renderPlayerChips() {
+  const c = document.getElementById('players-chips');
+  c.innerHTML = players.map((p, i) =>
+    `<span class="chip">${p}<button class="chip-del" onclick="removePlayer(${i})">×</button></span>`
+  ).join('');
+}
+
+function renderWordChips() {
+  const text = document.getElementById('words-textarea').value;
+  wordList = parseWords(text);
+  const c = document.getElementById('words-chips');
+  c.innerHTML = wordList.map(w => `<span class="chip word-chip">${w}</span>`).join('');
+}
+
+// ---- Start game ----
+function startGame() {
+  const warnP = document.getElementById('warn-players');
+  const warnW = document.getElementById('warn-words');
+  warnP.style.display = 'none';
+  warnW.style.display = 'none';
+
+  wordList = parseWords(document.getElementById('words-textarea').value);
+
+  if (players.length < 3) { warnP.style.display = 'block'; return; }
+  if (wordList.length === 0) { warnW.style.display = 'block'; return; }
+
+  const secretWord = wordList[Math.floor(Math.random() * wordList.length)];
+  const shuffled = [...players].sort(() => Math.random() - 0.5);
+  const impostorName = shuffled[0];
+
+  assignments = players.map(p => ({
+    name: p,
+    isImpostor: p === impostorName,
+    word: p === impostorName ? null : secretWord
+  })).sort(() => Math.random() - 0.5);
+
+  seenPlayers = new Set();
+  buildLobby();
+  showPhase('phase-lobby');
+}
+
+// ---- Lobby ----
+function buildLobby() {
+  const total = assignments.length;
+  document.getElementById('lobby-subtitle').textContent =
+    `Cada jugador toca su nombre para ver su palabra en secreto.`;
+
+  const grid = document.getElementById('players-grid');
+  grid.innerHTML = assignments.map((a, i) =>
+    `<button class="player-btn" id="pbtn-${i}" onclick="revealFor(${i})">${a.name}</button>`
+  ).join('');
+
+  updateLobbyProgress();
+}
+
+function updateLobbyProgress() {
+  const total = assignments.length;
+  const seen = seenPlayers.size;
+  document.getElementById('lobby-progress').textContent = `${seen} / ${total} jugadores`;
+  document.getElementById('lobby-bar').style.width = `${(seen / total) * 100}%`;
+
+  const allBtn = document.getElementById('btn-all-seen');
+  allBtn.style.display = seen === total ? 'block' : 'none';
+}
+
+function revealFor(i) {
+  const a = assignments[i];
+  document.getElementById('reveal-name').textContent = a.name;
+
+  const roleEl = document.getElementById('reveal-role');
+  const wordEl = document.getElementById('reveal-word');
+  const hintEl = document.getElementById('reveal-hint');
+
+  if (a.isImpostor) {
+    roleEl.textContent = 'IMPOSTOR';
+    roleEl.className = 'reveal-role impostor';
+    wordEl.textContent = '???';
+    wordEl.className = 'big-word impostor-word';
+    hintEl.textContent = 'No conoces la palabra secreta. Escucha y trata de adivinarla sin que te descubran.';
+  } else {
+    roleEl.textContent = 'JUGADOR NORMAL';
+    roleEl.className = 'reveal-role normal';
+    wordEl.textContent = a.word;
+    wordEl.className = 'big-word normal-word';
+    hintEl.textContent = 'Esta es la palabra secreta. Descríbela sin decirla directamente. ¡Encuentra al impostor!';
+  }
+
+  document.getElementById('reveal-container').dataset.playerIndex = i;
+  showPhase('phase-reveal');
+}
+
+function closeReveal() {
+  const i = parseInt(document.getElementById('reveal-container').dataset.playerIndex);
+  const a = assignments[i];
+  seenPlayers.add(i);
+
+  const btn = document.getElementById(`pbtn-${i}`);
+  if (btn) {
+    btn.classList.add('seen');
+    btn.disabled = true;
+  }
+
+  updateLobbyProgress();
+  showPhase('phase-lobby');
+}
+
+// ---- Vote ----
+function goToVote() {
+  showPhase('phase-vote');
+}
+
+// ---- Results ----
+function showResults() {
+  const secret = assignments.find(a => !a.isImpostor)?.word || '—';
+  document.getElementById('results-secret-word').textContent = secret;
+
+  const list = document.getElementById('results-list');
+  list.innerHTML = assignments.map(a =>
+    `<div class="result-item">
+      <span class="result-name">${a.name}</span>
+      <span class="badge ${a.isImpostor ? 'badge-imp' : 'badge-norm'}">${a.isImpostor ? 'Impostor' : 'Normal'}</span>
+    </div>`
+  ).join('');
+
+  showPhase('phase-results');
+}
+
+function playAgainSameConfig() {
+  wordList = parseWords(document.getElementById('words-textarea').value);
+  const secretWord = wordList[Math.floor(Math.random() * wordList.length)];
+  const shuffled = [...players].sort(() => Math.random() - 0.5);
+  const impostorName = shuffled[0];
+
+  assignments = players.map(p => ({
+    name: p,
+    isImpostor: p === impostorName,
+    word: p === impostorName ? null : secretWord
+  })).sort(() => Math.random() - 0.5);
+
+  seenPlayers = new Set();
+  buildLobby();
+  showPhase('phase-lobby');
+}
+
+function goSetup() {
+  showPhase('phase-setup');
+}
+</script>
+</body>
+</html>
